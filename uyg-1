@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Melek & İhsan</title>
+<style>
+  body {
+    margin: 0; background: #000; color: #ccc; font-family: Arial, sans-serif;
+    overflow-x: hidden;
+  }
+  header {
+    text-align: center; padding: 20px;
+    color: #9c27b0; /* mor */
+    font-size: 2em;
+    font-weight: bold;
+  }
+  #loginScreen, #mainApp {
+    max-width: 500px; margin: 0 auto; padding: 20px;
+  }
+  #loginScreen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 80vh;
+  }
+  input[type="password"] {
+    font-size: 1.2em; padding: 10px; width: 80%; margin-bottom: 15px;
+    border-radius: 5px; border: none;
+  }
+  button {
+    font-size: 1.2em; padding: 10px 25px; background: #4caf50; color: white;
+    border: none; border-radius: 5px; cursor: pointer;
+  }
+  button:hover {
+    background: #388e3c;
+  }
+  nav {
+    display: flex; justify-content: space-around; margin-bottom: 15px;
+  }
+  nav button {
+    flex-grow: 1; margin: 0 5px; background: #9c27b0;
+  }
+  nav button.active {
+    background: #4caf50;
+  }
+  section {
+    background: #111; padding: 15px; border-radius: 8px; min-height: 250px;
+  }
+  /* Listeler */
+  ul {
+    list-style: none; padding: 0; margin: 0;
+    max-height: 180px; overflow-y: auto;
+  }
+  li {
+    padding: 6px 5px; border-bottom: 1px solid #333;
+  }
+  li:last-child {
+    border-bottom: none;
+  }
+  /* Kalp animasyon */
+  .heart {
+    position: fixed; width: 15px; height: 15px; background: transparent;
+    animation: floatUp 3s linear forwards;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  .heart svg {
+    fill: #9c27b0;
+    animation: pulse 1s infinite alternate;
+  }
+  @keyframes floatUp {
+    0% {opacity:1; transform: translateY(0) scale(1);}
+    100% {opacity:0; transform: translateY(-150px) scale(1.3);}
+  }
+  @keyframes pulse {
+    0% {transform: scale(1);}
+    100% {transform: scale(1.2);}
+  }
+  /* Mor ve yeşil kalpler */
+  .floating-heart {
+    position: fixed; bottom: 0; width: 20px; height: 20px;
+    animation: floatUp 5s linear forwards;
+    pointer-events: none;
+    z-index: 1000;
+  }
+  .floating-heart.purple svg {
+    fill: #9c27b0;
+  }
+  .floating-heart.green svg {
+    fill: #4caf50;
+  }
+</style>
+</head>
+<body>
+
+<header>Melek & İhsan</header>
+
+<div id="loginScreen">
+  <input type="password" id="passwordInput" placeholder="Şifre" />
+  <button id="loginBtn">Giriş</button>
+  <p id="loginMsg" style="color:#f44336; margin-top:10px;"></p>
+</div>
+
+<div id="mainApp" style="display:none;">
+  <nav>
+    <button id="btnMusic" class="active">Müzikler</button>
+    <button id="btnPhotos">Fotoğraflar</button>
+    <button id="btnNotes">Notlar</button>
+  </nav>
+
+  <section id="musicSection">
+    <ul id="musicList"></ul>
+    <input type="file" id="musicFileInput" accept="audio/*" style="display:none" />
+    <button id="addMusicBtn">Müzik Ekle</button>
+    <audio id="audioPlayer" controls style="width: 100%; margin-top: 10px;"></audio>
+  </section>
+
+  <section id="photoSection" style="display:none;">
+    <ul id="photoList"></ul>
+    <input type="file" id="photoFileInput" accept="image/*" style="display:none" />
+    <button id="addPhotoBtn">Fotoğraf Ekle</button>
+  </section>
+
+  <section id="notesSection" style="display:none;">
+    <ul id="notesList"></ul>
+    <input type="text" id="noteInput" placeholder="Yeni not ekle" style="width: 80%; padding: 8px;" />
+    <button id="addNoteBtn">Not Ekle</button>
+  </section>
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+
+<script>
+  // Firebase yapılandırmanı buraya koymalısın (kendi Firebase projenin config bilgileri)
+  const firebaseConfig = {
+    apiKey: "API_KEY_HERE",
+    authDomain: "PROJECT_ID.firebaseapp.com",
+    databaseURL: "https://PROJECT_ID-default-rtdb.firebaseio.com",
+    projectId: "PROJECT_ID",
+    storageBucket: "PROJECT_ID.appspot.com",
+    messagingSenderId: "SENDER_ID",
+    appId: "APP_ID"
+  };
+
+  // Firebase başlat
+  firebase.initializeApp(firebaseConfig);
+
+  const db = firebase.database();
+  const storage = firebase.storage();
+
+  const PASSWORD = "melekilenihsan";
+
+  // Giriş elemanları
+  const loginScreen = document.getElementById("loginScreen");
+  const mainApp = document.getElementById("mainApp");
+  const passwordInput = document.getElementById("passwordInput");
+  const loginBtn = document.getElementById("loginBtn");
+  const loginMsg = document.getElementById("loginMsg");
+
+  loginBtn.onclick = () => {
+    if (passwordInput.value === PASSWORD) {
+      loginScreen.style.display = "none";
+      mainApp.style.display = "block";
+      startApp();
+    } else {
+      loginMsg.textContent = "Şifre yanlış!";
+    }
+  };
+
+  // Kalpler uçuşma animasyonu
+  function createFloatingHeart() {
+    const heart = document.createElement("div");
+    heart.className = "floating-heart";
+    heart.style.left = (Math.random() * window.innerWidth) + "px";
+    heart.classList.add(Math.random() < 0.5 ? "purple" : "green");
+    heart.innerHTML = `
+      <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 
+      4.42 3 7.5 3c1.74 0 3.41 0.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 
+      22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+    document.body.appendChild(heart);
+    setTimeout(() => {
+      heart.remove();
+    }, 5000);
+  }
+
+  // Arka planda kalpler
+  setInterval(createFloatingHeart, 700);
+
+  function startApp() {
+    const musicList = document.getElementById("musicList");
+    const addMusicBtn = document.getElementById("addMusicBtn");
+    const musicFileInput = document.getElementById("musicFileInput");
+    const audioPlayer = document.getElementById("audioPlayer");
+
+    const photoList = document.getElementById("photoList");
+    const addPhotoBtn = document.getElementById("addPhotoBtn");
+    const photoFileInput = document.getElementById("photoFileInput");
+
+    const notesList = document.getElementById("notesList");
+    const noteInput = document.getElementById("noteInput");
+    const addNoteBtn = document.getElementById("addNoteBtn");
+
+    // Sekme butonları
+    const btnMusic = document.getElementById("btnMusic");
+    const btnPhotos = document.getElementById("btnPhotos");
+    const btnNotes = document.getElementById("btnNotes");
+
+    btnMusic.onclick = () => {
+      btnMusic.classList.add("active");
+      btnPhotos.classList.remove("active");
+      btnNotes.classList.remove("active");
+      document.getElementById("musicSection").style.display = "block";
+      document.getElementById("photoSection").style.display = "none";
+      document.getElementById("notesSection").style.display = "none";
+    };
+    btnPhotos.onclick = () => {
+      btnMusic.classList.remove("active");
+      btnPhotos.classList.add("active");
+      btnNotes.classList.remove("active");
+      document.getElementById("musicSection").style.display = "none";
+      document.getElementById("photoSection").style.display = "block";
+      document.getElementById("notesSection").style.display = "none";
+    };
+    btnNotes.onclick = () => {
+      btnMusic.classList.remove("active");
+      btnPhotos.classList.remove("active");
+      btnNotes.classList.add("active");
+      document.getElementById("musicSection").style.display = "none";
+      document.getElementById("photoSection").style.display = "none";
+      document.getElementById("notesSection").style.display = "block";
+    };
+
+    // Müzik yükleme
+    addMusicBtn.onclick = () => musicFileInput.click();
+
+    musicFileInput.onchange = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const storageRef = storage.ref('music/' + file.name);
+      const uploadTask = storageRef.put(file);
+      uploadTask.on('state_changed',
+        null,
+        error => alert('Yükleme hatası: ' + error.message),
+        () => {
+          uploadTask.snapshot.ref.getDownloadURL().then(url => {
+            const newMusicRef = db.ref('music').push();
+            newMusicRef.set({ name: file.name, url });
+          });
+        });
+    };
+
+    // Müzik listesini dinle ve güncelle
+    db.ref('music').on('value', snapshot => {
+      musicList.innerHTML = '';
+      snapshot.forEach(child => {
+        const music = child.val();
+        const li = document.createElement('li');
+        li.textContent = music.name;
+        li.style.cursor = "pointer";
+        li.onclick = () => {
+          audioPlayer.src = music.url;
+          audioPlayer.play();
+          // Oynatma esnasında kalp animasyonu oluşturabiliriz (isteğe göre)
+          createPlayingHearts();
+        };
+        musicList.appendChild(li);
+      });
+    });
+
+    // Fotoğraf yükleme
+    addPhotoBtn.onclick = () => photoFileInput.click();
+
+    photoFileInput.onchange = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const storageRef = storage.ref('photos/' + file.name);
+      const uploadTask = storageRef.put(file);
+      uploadTask.on('state_changed',
+        null,
+        error => alert('Yükleme hatası: ' + error.message),
+        () => {
+          uploadTask.snapshot.ref.getDownloadURL().then(url => {
+            const newPhotoRef = db.ref('photos').push();
+            newPhotoRef.set({ name: file.name, url });
+          });
+        });
+    };
+
+    // Fotoğraf listesini dinle ve güncelle
+    db.ref('photos').on('value', snapshot => {
+      photoList.innerHTML = '';
+      snapshot.forEach(child => {
+        const photo = child.val();
+        const li = document.createElement('li');
+        const img = document.createElement('img');
+        img.src = photo.url;
+        img.alt = photo.name;
+        img.style.maxWidth = "100%";
+        img.style.borderRadius = "8px";
+        li.appendChild(img);
+        photoList.appendChild(li);
+      });
+    });
+
+    // Not ekleme
+    addNoteBtn.onclick = () => {
+      const noteText = noteInput.value.trim();
+      if (!noteText) return alert('Not boş olamaz');
+      const newNoteRef = db.ref('notes').push();
+      newNoteRef.set({ text: noteText });
+      noteInput.value = '';
+    };
+
+    // Not listesini dinle ve güncelle
+    db.ref('notes').on('value', snapshot => {
+      notesList.innerHTML = '';
+      snapshot.forEach(child => {
+        const note = child.val();
+        const li = document.createElement('li');
+        li.textContent = note.text;
+        notesList.appendChild(li);
+      });
+    });
+
+    // Müzik oynarken kalp animasyonu
+    function createPlayingHearts() {
+      for(let i=0; i<5; i++) {
+        const heart = document.createElement("div");
+        heart.className = "heart";
+        heart.style.left = (window.innerWidth/2 + (Math.random()*100 - 50)) + "px";
+        heart.style.top = (window.innerHeight/2 + (Math.random()*100 - 50)) + "px";
+        heart.innerHTML = `
+          <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 
+          4.42 3 7.5 3c1.74 0 3.41 0.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 
+          22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+        document.body.appendChild(heart);
+        setTimeout(() => {
+          heart.remove();
+        }, 3000);
+      }
+    }
+  }
+</script>
+
+</body>
+</html>
